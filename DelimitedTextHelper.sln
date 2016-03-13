@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.24720.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DelimitedTextHelper.test", "DelimitedTextHelper.test\DelimitedTextHelper.test.csproj", "{3113CAB2-CC82-4DC7-92DE-2387745E0460}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DelimitedTextHelper", "DelimitedTextHelper\DelimitedTextHelper.csproj", "{B4916ED6-7419-4A29-916D-39BE34F7A424}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3113CAB2-CC82-4DC7-92DE-2387745E0460}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3113CAB2-CC82-4DC7-92DE-2387745E0460}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3113CAB2-CC82-4DC7-92DE-2387745E0460}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3113CAB2-CC82-4DC7-92DE-2387745E0460}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B4916ED6-7419-4A29-916D-39BE34F7A424}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B4916ED6-7419-4A29-916D-39BE34F7A424}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B4916ED6-7419-4A29-916D-39BE34F7A424}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B4916ED6-7419-4A29-916D-39BE34F7A424}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
