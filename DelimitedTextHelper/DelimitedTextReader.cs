@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
@@ -113,9 +114,8 @@ namespace DelimitedTextHelper
 		{
             var property = GetProperty<TRecord>(expression);
 
-            var propertyMap = new PropertyMapping()
+            var propertyMap = new PropertyMapping(property)
             {
-                PropertyInfo = property,
                 MappedColumnIndex = getMaxIndex() + 1
             };
 
@@ -180,8 +180,12 @@ namespace DelimitedTextHelper
                             index = pm.MappedColumnIndex;
                         }
                     }
-                    var value = Convert.ChangeType(CurrentRecord[index], pm.PropertyInfo.PropertyType);
-                    pm.PropertyInfo.SetValue(record, value);
+                    //var value = Convert.ChangeType(CurrentRecord[index], pm.PropertyInfo.PropertyType);
+                    if(pm.TypeConverter != null)
+                    {
+                        var value = pm.TypeConverter.ConvertFromString(CurrentRecord[index]);
+                        pm.PropertyInfo.SetValue(record, value);
+                    }                    
                 }
 				
 				return record;
@@ -221,9 +225,8 @@ namespace DelimitedTextHelper
                                 continue;
                             }
 
-                            PropertyMapping pm = new PropertyMapping()
+                            PropertyMapping pm = new PropertyMapping(property)
                             {
-                                PropertyInfo = property,
                                 MappedColumnIndex = i,
                                 MappedColumnName = FieldHeaders[i],
                             };
@@ -245,16 +248,17 @@ namespace DelimitedTextHelper
         {
             
             foreach (var property in properties)
-            {                
-                PropertyMapping pm = new PropertyMapping();
-
+            {
                 int index = getMaxIndex() + 1;
 
                 if (index < CurrentRecord.Length)
                 {
-                    pm.MappedColumnIndex = index;
-                    pm.MappedColumnName = FirstRowIsHeader ? FieldHeaders[index] : string.Empty;
-                    pm.PropertyInfo = property;
+                    PropertyMapping pm = new PropertyMapping(property)
+                    {
+                        MappedColumnIndex = index,
+                        MappedColumnName = FirstRowIsHeader ? FieldHeaders[index] : string.Empty
+                    };
+
                     _propertyMappings.Add(pm);
                 }
             }
@@ -264,18 +268,19 @@ namespace DelimitedTextHelper
         {            
             foreach (var property in properties)
             {
-                PropertyMapping pm = new PropertyMapping();
-
+                
                 int index = Array.FindIndex(FieldHeaders, t => t.Equals(property.Name, StringComparison.InvariantCultureIgnoreCase));
 
                 if (index == -1)
                 {                        
                     continue;
                 }
-                
-                pm.MappedColumnIndex = index;
-                pm.MappedColumnName = FieldHeaders[index];
-                pm.PropertyInfo = property;
+                PropertyMapping pm = new PropertyMapping(property)
+                {
+                    MappedColumnIndex = index,
+                    MappedColumnName = FieldHeaders[index]
+                };
+
                 _propertyMappings.Add(pm);
             }
         }
@@ -342,11 +347,18 @@ namespace DelimitedTextHelper
 		public string MappedColumnName { get; set; }
 		public int MappedColumnIndex { get; set; }
 		public bool UseColumnName { get; set; }
+        public TypeConverter TypeConverter { get; set; }
         public PropertyMapping ColumnName(string name)
         {
             MappedColumnName = name;
             UseColumnName = true;
             return this;
         } 
+
+        public PropertyMapping(PropertyInfo property)
+        {
+            PropertyInfo = property;
+            TypeConverter = TypeDescriptor.GetConverter(property.DeclaringType);
+        }
 	}
 }
