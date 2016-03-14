@@ -2,199 +2,351 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace DelimitedTextHelper
 {
-    public class DelimitedTextReader : IDisposable
-    {
-        private DelimitedTextParser _parser;
-        private string[] _currentRecord;
-        private string[] _headerRecord;
-        private int _currentIndex = -1;
-        private bool _doneReading;
-        private bool _hasBeenRead;
-        
-        public virtual bool AreFieldHeadersCaseSensitive { get; set; }
-        public virtual bool FirstRowIsHeader { get; set; }
-        /// <summary>
+	public class DelimitedTextReader : IDisposable
+	{
+		private DelimitedTextParser _parser;
+		private string[] _currentRecord;
+		private string[] _headerRecord;
+		private int _currentIndex = -1;
+		private bool _doneReading;
+		private bool _hasBeenRead;
+		
+        public virtual bool IgnoreMappingExceptions { get; set; }
+		public virtual bool AreFieldHeadersCaseSensitive { get; set; }
+		public virtual bool FirstRowIsHeader { get; set; }
+		/// <summary>
 		/// Gets the field headers.
 		/// </summary>
 		public virtual string[] FieldHeaders
-        {
-            get
+		{
+			get
+			{
+				throwIfParserHasNotBeenRead();
+				return _headerRecord;
+			}
+		}
+
+		/// <summary>
+		/// Get the current record;
+		/// </summary>
+		public virtual string[] CurrentRecord
+		{
+			get
+			{
+				throwIfParserHasNotBeenRead();
+				return _currentRecord;
+			}
+		}
+		
+		public DelimitedTextReader(TextReader reader):this(reader, ',')
+		{
+		}
+
+		public DelimitedTextReader(TextReader reader, char delimiter)
+		{
+			_parser = new DelimitedTextParser(reader, delimiter);
+		}
+				
+		public virtual bool Read()
+		{
+			//CheckDisposed();
+
+			if (_doneReading)
+			{
+				return false;
+			}
+
+			if (FirstRowIsHeader && _headerRecord == null)
+			{
+				do
+				{
+					_currentRecord = _parser.Read();
+				}
+				while (SkipRecord());
+				_headerRecord = _currentRecord;
+				_currentRecord = null;
+				ParseNamedIndexes();
+			}
+
+			do
+			{
+				_currentRecord = _parser.Read();
+			}
+			while (SkipRecord());
+
+			_currentIndex = -1;
+			_hasBeenRead = true;
+
+			if (_currentRecord == null)
+			{
+				_doneReading = true;
+			}
+
+			return _currentRecord != null;
+		}
+
+		public TEntity GetRecord<TEntity>() where TEntity : new()
+		{
+			throwIfParserHasNotBeenRead();
+			TEntity record;
+			try
+			{
+				record = createRecord<TEntity>();
+			}
+			catch (Exception)
+			{
+
+				throw;
+			}
+			return record;
+		}
+
+        private List<PropertyMapping> _propertyMappings = new List<PropertyMapping>();
+		public PropertyMapping MapProperty<TRecord>(Expression<Func<TRecord, object>> expression)
+		{
+            var property = GetProperty<TRecord>(expression);
+
+            var propertyMap = new PropertyMapping()
             {
-                throwIfParserHasNotBeenRead();
-                return _headerRecord;
+                PropertyInfo = property,
+                MappedColumnIndex = getMaxIndex() + 1
+            };
+
+            _propertyMappings.Add(propertyMap);
+
+            return propertyMap;
+		}
+
+		public bool SkipRecord()
+		{
+			return false;
+		}
+
+		public void ParseNamedIndexes()
+		{
+
+		}
+
+		public void Dispose()
+		{
+			
+		}
+
+        private int getMaxIndex()
+        {
+            if(_propertyMappings.Count == 0)
+            {
+                return -1;
             }
-        }
 
-        /// <summary>
-        /// Get the current record;
-        /// </summary>
-        public virtual string[] CurrentRecord
-        {
-            get
+            var indexes = new List<int>();
+            if(_propertyMappings.Count > 0)
             {
-                throwIfParserHasNotBeenRead();
-                return _currentRecord;
+                indexes.Add(_propertyMappings.Max(pm => pm.MappedColumnIndex));
             }
-        }
-        
-        public DelimitedTextReader(TextReader reader):this(reader, ',')
-        {
+            return indexes.Max();
         }
 
-        public DelimitedTextReader(TextReader reader, char delimiter)
-        {
-            _parser = new DelimitedTextParser(reader, delimiter);
-        }
-                
-        public virtual bool Read()
-        {
-            //CheckDisposed();
+		private TEntity createRecord<TEntity>() where TEntity:new()
+		{
+			TEntity record;
+			try
+			{
+				record = new TEntity();
+                //try to auto map the header names to properties on the class
+                //first get all of the property infos for the type:
+                AutoGeneratePropertyMappings<TEntity>();
 
-            if (_doneReading)
-            {
-                return false;
-            }
-
-            if (FirstRowIsHeader && _headerRecord == null)
-            {
-                do
+                foreach (var pm in _propertyMappings)
                 {
-                    _currentRecord = _parser.Read();
+                    int index = pm.MappedColumnIndex;
+                    if(pm.UseColumnName && FirstRowIsHeader)
+                    {
+                        index = Array.FindIndex(FieldHeaders, t => t.Equals(pm.MappedColumnName, StringComparison.InvariantCultureIgnoreCase));
+                        if(index == -1)
+                        {
+                            if (!IgnoreMappingExceptions)
+                            {
+                                string message = string.Format("Mapping exception occurred.  The property '{0}' could not be mapped to column '{1}'", pm.PropertyInfo.Name, pm.MappedColumnName);
+                                throw new Exception();
+                            }
+                            index = pm.MappedColumnIndex;
+                        }
+                    }
+                    var value = Convert.ChangeType(CurrentRecord[index], pm.PropertyInfo.PropertyType);
+                    pm.PropertyInfo.SetValue(record, value);
                 }
-                while (SkipRecord());
-                _headerRecord = _currentRecord;
-                _currentRecord = null;
-                ParseNamedIndexes();
-            }
+				
+				return record;
+			}
+			catch (Exception)
+			{
 
-            do
+				throw;
+			}
+			
+		}
+
+		//private Dictionary<string, PropertyInfo> _propertyMappings = new Dictionary<string, PropertyInfo>();
+		private void AutoGeneratePropertyMappings<TRecord>()
+		{
+            if (_propertyMappings.Count == 0)
             {
-                _currentRecord = _parser.Read();
-            }
-            while (SkipRecord());
-
-            _currentIndex = -1;
-            _hasBeenRead = true;
-
-            if (_currentRecord == null)
-            {
-                _doneReading = true;
-            }
-
-            return _currentRecord != null;
-        }
-
-        public TEntity GetRecord<TEntity>() where TEntity : new()
-        {
-            throwIfParserHasNotBeenRead();
-            TEntity record;
-            try
-            {
-                record = createRecord<TEntity>();
-            }
-            catch (Exception)
-            {
-
-                throw;
-            }
-            return record;
-        }
-
-        public bool SkipRecord()
-        {
-            return false;
-        }
-
-        public void ParseNamedIndexes()
-        {
-
-        }
-
-        public void Dispose()
-        {
-            
-        }
-
-        private TEntity createRecord<TEntity>() where TEntity:new()
-        {
-            TEntity record;
-            try
-            {
-                record = new TEntity();
+                var properties = typeof(TRecord).GetProperties().Where(x => x.PropertyType.Module.ScopeName == "CommonLanguageRuntimeLibrary").ToArray();
                 if (FirstRowIsHeader)
                 {
-                    //try to auto map the header names to properties on the class
-                    //first get all of the property infos for the type:
-                    buildPropertyMappings<TEntity>();
-                    for(int i = 0; i < _headerRecord.Length;i++)
-                    {
-                        var item = _headerRecord[i];                        
-                        if(_propertyMappings.ContainsKey(item))
+                    AutoGeneratePropertyMappingsByName<TRecord>(properties);
+                    //get the propertied that were not mapped
+                    var headers = FieldHeaders.ToList<string>();                    
+                    var mappedNames = _propertyMappings.Select(n => n.MappedColumnName).ToList();
+                    foreach (var property in properties)
+                    {                        
+                        var existingPM = _propertyMappings.Where(m => m.PropertyInfo == property).FirstOrDefault();
+                        if (existingPM != null)
                         {
-                            var value = Convert.ChangeType(CurrentRecord[i], _propertyMappings[item].PropertyType);                           
-                            _propertyMappings[item].SetValue(record, value);
+                            continue;
+                        }
+
+                        for (int i = 0; i < FieldHeaders.Length; i++)
+                        {
+                            if (mappedNames.Contains(FieldHeaders[i]))
+                            {
+                                continue;
+                            }
+
+                            PropertyMapping pm = new PropertyMapping()
+                            {
+                                PropertyInfo = property,
+                                MappedColumnIndex = i,
+                                MappedColumnName = FieldHeaders[i],
+                            };
+
+                            mappedNames.Add(FieldHeaders[i]);
+                            _propertyMappings.Add(pm);
+                            break;
                         }
                     }
                 }
-                return record;
-            }
-            catch (Exception)
-            {
-
-                throw;
-            }
-            
-        }
-
-        private Dictionary<string, PropertyInfo> _propertyMappings = new Dictionary<string, PropertyInfo>();
-        private void buildPropertyMappings<TRecord>()
-        {
-            if (FirstRowIsHeader)
-            {
-                //try to auto map the header names to properties on the class
-                //first get all of the property infos for the type:
-                var propertyCount = typeof(TRecord).GetRuntimeProperties().Count();
-                
-                for (int i = 0; i < _headerRecord.Length; i++)
+                else
                 {
-                    var item =  _headerRecord[i];
-                    var prop = GetProperty<TRecord>(item);
-                    if (prop != null)
-                    {
-                        _propertyMappings.Add(_headerRecord[i], prop);
-                    }
-                }                
+                    AutoGeneratePropertyMappingsByIndex<TRecord>(properties);
+                }
             }
-            else
-            {
-                //build property map by index.  map according to the property name in order it appears
-                var properties = typeof(TRecord).GetRuntimeProperties();
+		}
+
+        private void AutoGeneratePropertyMappingsByIndex<TRecord>(PropertyInfo[] properties)
+        {
+            
+            foreach (var property in properties)
+            {                
+                PropertyMapping pm = new PropertyMapping();
+
+                int index = getMaxIndex() + 1;
+
+                if (index < CurrentRecord.Length)
+                {
+                    pm.MappedColumnIndex = index;
+                    pm.MappedColumnName = FirstRowIsHeader ? FieldHeaders[index] : string.Empty;
+                    pm.PropertyInfo = property;
+                    _propertyMappings.Add(pm);
+                }
             }
         }
 
-        private PropertyInfo GetProperty<T>( string propertyName)
-        {
-            BindingFlags flags = BindingFlags.Public | BindingFlags.Instance;
-            if (!AreFieldHeadersCaseSensitive)
+        private void AutoGeneratePropertyMappingsByName<TRecord>(PropertyInfo[] properties)
+        {            
+            foreach (var property in properties)
             {
-                flags = flags | BindingFlags.IgnoreCase;
+                PropertyMapping pm = new PropertyMapping();
+
+                int index = Array.FindIndex(FieldHeaders, t => t.Equals(property.Name, StringComparison.InvariantCultureIgnoreCase));
+
+                if (index == -1)
+                {                        
+                    continue;
+                }
+                
+                pm.MappedColumnIndex = index;
+                pm.MappedColumnName = FieldHeaders[index];
+                pm.PropertyInfo = property;
+                _propertyMappings.Add(pm);
             }
-            PropertyInfo pi = typeof(T).GetProperty(propertyName, flags);
-            return pi;
         }
 
-        private void throwIfParserHasNotBeenRead()
+		private PropertyInfo GetProperty<T>( string propertyName)
+		{
+			BindingFlags flags = BindingFlags.Public | BindingFlags.Instance;
+			if (!AreFieldHeadersCaseSensitive)
+			{
+				flags = flags | BindingFlags.IgnoreCase;
+			}
+			PropertyInfo pi = typeof(T).GetProperty(propertyName, flags);
+			return pi;
+		}
+
+		private void throwIfParserHasNotBeenRead()
+		{
+			if (!_hasBeenRead)
+			{
+				throw new Exception("Read must be invoked before data can bee accessed.");
+			}
+		}
+
+		private PropertyInfo GetProperty<TRecord>(Expression<Func<TRecord, object>> expression)
+		{
+			var member = GetMemberExpression(expression).Member;
+			var property = member as PropertyInfo;
+			if(property == null)
+			{
+				throw new Exception(string.Format("'{0}' is not a property."));
+			}
+
+			return property;
+		}
+
+		private MemberExpression GetMemberExpression<TModel, T>(Expression<Func<TModel, T>> expression)
+		{
+			// This method was taken from FluentNHibernate.Utils.ReflectionHelper.cs and modified.
+			// http://fluentnhibernate.org/
+
+			MemberExpression memberExpression = null;
+			if (expression.Body.NodeType == ExpressionType.Convert)
+			{
+				var body = (UnaryExpression)expression.Body;
+				memberExpression = body.Operand as MemberExpression;
+			}
+			else if (expression.Body.NodeType == ExpressionType.MemberAccess)
+			{
+				memberExpression = expression.Body as MemberExpression;
+			}
+
+			if (memberExpression == null)
+			{
+				throw new ArgumentException("Not a member access", "expression");
+			}
+
+			return memberExpression;
+		}
+	}
+
+	public class PropertyMapping
+	{
+		public PropertyInfo PropertyInfo { get; set; }
+		public string MappedColumnName { get; set; }
+		public int MappedColumnIndex { get; set; }
+		public bool UseColumnName { get; set; }
+        public PropertyMapping ColumnName(string name)
         {
-            if (!_hasBeenRead)
-            {
-                throw new Exception("Read must be invoked before data can bee accessed.");
-            }
-        }
-    }
+            MappedColumnName = name;
+            UseColumnName = true;
+            return this;
+        } 
+	}
 }
