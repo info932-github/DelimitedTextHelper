@@ -10,13 +10,11 @@ namespace DelimitedTextHelper
     public class DelimitedTextParser : IDisposable
     {
         private TextReader _reader;
-        private char _delimiter;
-        private static Regex rexCsvSplitter = new Regex(@",(?=(?:[^""]*""[^""]*"")*(?![^""]*""))");
-        private static Regex rexRunOnLine = new Regex(@"^[^""]*(?:""[^""]*""[^""]*)*""[^""]*$");
+        private char _delimiter;        
 
         private const string QUOTE = "\"";
         private const string ESCAPED_QUOTE = "\"\"";
-        private char[] CHARACTERS_THAT_MUST_BE_QUOTED = { ',', '"', '\n' };
+        private char[] CHARACTERS_THAT_MUST_BE_QUOTED;
 
         public DelimitedTextParser(TextReader reader):this(reader, ',')
         {
@@ -27,6 +25,7 @@ namespace DelimitedTextHelper
         {
             _delimiter = delimiter;
             _reader = reader;
+            CHARACTERS_THAT_MUST_BE_QUOTED = new char[]{ _delimiter, '"', '\n' };
         }
 
         public virtual string[] Read()
@@ -64,92 +63,6 @@ namespace DelimitedTextHelper
                 throw;
             }
         }
-
-        public IEnumerable<string> SplitRow(string row, char delimiter = ',')
-        {
-            var currentString = new StringBuilder();
-            var inQuotes = false;
-            var quoteIsEscaped = false; //Store when a quote has been escaped.
-            row = string.Format("{0}{1}", row, delimiter); //We add new cells at the delimiter, so append one for the parser.
-            foreach (var character in row.ToCharArray().Select((val, index) => new { val, index }))
-            {
-                if (character.val == delimiter) //We hit a delimiter character...
-                {
-                    if (!inQuotes) //Are we inside quotes? If not, we've hit the end of a cell value.
-                    {
-                        //Console.WriteLine(currentString);
-                        yield return currentString.ToString();
-                        currentString.Clear();
-                    }
-                    else
-                    {
-                        currentString.Append(character.val);
-                    }
-                }
-                else
-                {
-                    if (character.val != ' ')
-                    {
-                        if (character.val == '"') //If we've hit a quote character...
-                        {
-                            if (character.val == '"' && inQuotes) //Does it appear to be a closing quote?
-                            {
-                                if (row[character.index + 1] == character.val && !quoteIsEscaped) //If the character afterwards is also a quote, this is to escape that (not a closing quote).
-                                {
-                                    quoteIsEscaped = true; //Flag that we are escaped for the next character. Don't add the escaping quote.
-                                }
-                                else if (quoteIsEscaped)
-                                {
-                                    quoteIsEscaped = false; //This is an escaped quote. Add it and revert quoteIsEscaped to false.
-                                    currentString.Append(character.val);
-                                }
-                                else
-                                {
-                                    inQuotes = false;
-                                }
-                            }
-                            else
-                            {
-                                if (!inQuotes)
-                                {
-                                    inQuotes = true;
-                                }
-                                else
-                                {
-                                    currentString.Append(character.val); //...It's a quote inside a quote.
-                                }
-                            }
-                        }
-                        else
-                        {
-                            currentString.Append(character.val);
-                        }
-                    }
-                    else
-                    {
-                        if (!string.IsNullOrWhiteSpace(currentString.ToString())) //Append only if not new cell
-                        {
-                            currentString.Append(character.val);
-                        }
-                    }
-                }
-            }
-        }
-
-        //public string[] GetRow(string sLine)
-        //{
-
-
-        //        string[] values = rexCsvSplitter.Split(sLine);
-
-        //    for (int i = 0; i < values.Length; i++)
-        //    {
-        //        values[i] = Unescape(values[i]);
-        //    }
-
-        //    return values;
-        //}
-
         public string[] GetRow(string csvText)
         {
             List<string> tokens = new List<string>();
@@ -160,19 +73,17 @@ namespace DelimitedTextHelper
 
             while (current < csvText.Length)
             {
-                switch (csvText[current])
+                if(csvText[current] == '"')
                 {
-                    case '"':
-                        inText = !inText; break;
-                    case ',':
-                        if (!inText)
-                        {
-                            tokens.Add(Unescape(csvText.Substring(last + 1, (current - last)).Trim(',')));
-                            last = current;
-                        }
-                        break;
-                    default:
-                        break;
+                    inText = !inText;
+                }
+                else if (csvText[current] == _delimiter)
+                {
+                    if (!inText)
+                    {
+                        tokens.Add(Unescape(csvText.Substring(last + 1, (current - last)).Trim(_delimiter)));
+                        last = current;
+                    }
                 }
                 current++;
             }
