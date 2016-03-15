@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
@@ -181,9 +182,9 @@ namespace DelimitedTextHelper
                         }
                     }
                     //var value = Convert.ChangeType(CurrentRecord[index], pm.PropertyInfo.PropertyType);
-                    if(pm.TypeConverter != null)
+                    if(pm.GetTypeConverter() != null)
                     {
-                        var value = pm.TypeConverter.ConvertFromString(CurrentRecord[index]);
+                        var value = pm.GetTypeConverter().ConvertFromString(CurrentRecord[index]);
                         pm.PropertyInfo.SetValue(record, value);
                     }                    
                 }
@@ -343,11 +344,29 @@ namespace DelimitedTextHelper
 
 	public class PropertyMapping
 	{
+        private TypeConverter _typeConverter;
 		public PropertyInfo PropertyInfo { get; set; }
 		public string MappedColumnName { get; set; }
 		public int MappedColumnIndex { get; set; }
 		public bool UseColumnName { get; set; }
-        public TypeConverter TypeConverter { get; set; }
+
+        public PropertyMapping ColumnIndex(int index)
+        {
+            MappedColumnIndex = index;
+            return this;
+        }
+
+        public PropertyMapping TypeConverter(TypeConverter typeConverter)
+        {
+            _typeConverter = typeConverter;
+            return this;
+        }
+
+        public TypeConverter GetTypeConverter()
+        {
+            return _typeConverter;
+        }
+
         public PropertyMapping ColumnName(string name)
         {
             MappedColumnName = name;
@@ -358,7 +377,36 @@ namespace DelimitedTextHelper
         public PropertyMapping(PropertyInfo property)
         {
             PropertyInfo = property;
-            TypeConverter = TypeDescriptor.GetConverter(property.DeclaringType);
+            _typeConverter = TypeDescriptor.GetConverter(property.PropertyType);
         }
 	}
+
+    public class DateTimeConverter: TypeConverter
+    {
+        public string Format { get; set; }
+
+        public override object ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, object value)
+        {
+            if(value == null)
+            {
+                return base.ConvertFrom(context, culture, value);
+            }
+
+            var text = (string)value;
+            if (text.Trim().Length == 0)
+            {
+                return DateTime.MinValue;
+            }
+
+            return string.IsNullOrEmpty(this.Format)
+                ? DateTime.Parse(text, CultureInfo.InvariantCulture)
+                : DateTime.ParseExact(text, this.Format, CultureInfo.InvariantCulture);
+
+        }
+
+        public override bool CanConvertFrom(ITypeDescriptorContext context, Type sourceType)
+        {
+            return sourceType == typeof(string);
+        }
+    }
 }

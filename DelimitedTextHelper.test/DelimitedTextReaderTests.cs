@@ -1,6 +1,7 @@
 ﻿using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.IO;
+using System.ComponentModel;
 
 namespace DelimitedTextParserTest
 {
@@ -275,6 +276,11 @@ namespace DelimitedTextParserTest
                 stream.Position = 0;
 
                 dtReader.FirstRowIsHeader = true;
+                dtReader.MapProperty<TestRecord>(m => m.Field1).ColumnIndex(0);
+                dtReader.MapProperty<TestRecord>(m => m.Field2).ColumnIndex(1);
+                dtReader.MapProperty<TestRecord>(m => m.Field3).ColumnIndex(2);
+                dtReader.MapProperty<TestRecord>(m => m.Field4).ColumnIndex(3).TypeConverter(new DelimitedTextHelper.DateTimeConverter() { Format = "yyyyMMdd" });
+                dtReader.MapProperty<TestRecord>(m => m.Field5).ColumnIndex(4);
                 dtReader.Read();
                 TestRecord trecord = dtReader.GetRecord<TestRecord>();
                 Assert.IsNotNull(trecord);
