@@ -48,13 +48,17 @@ namespace DelimitedTextHelper
 			}
 		}
 		
-		public DelimitedTextReader(TextReader reader):this(reader, ',')
+		public DelimitedTextReader(TextReader reader):this(reader, ',', false)
 		{
 		}
 
-		public DelimitedTextReader(TextReader reader, char delimiter)
+        public DelimitedTextReader(TextReader reader, char delimiter) : this(reader, delimiter, false)
+        {
+        }
+
+        public DelimitedTextReader(TextReader reader, char delimiter, bool skipComments)
 		{
-			_parser = new DelimitedTextParser(reader, delimiter);
+			_parser = new DelimitedTextParser(reader, delimiter, skipComments);
 		}
 				
 		public virtual bool Read()
@@ -95,13 +99,25 @@ namespace DelimitedTextHelper
 			return _currentRecord != null;
 		}
 
-		public TEntity GetRecord<TEntity>() where TEntity : new()
+        public T GetField<T>(int Index)
+        {
+            if(Index > -1 && Index < CurrentRecord.Length)
+            {
+                Type t = typeof(T);
+                TypeConverter tc = TypeDescriptor.GetConverter(t);
+                var value = tc.ConvertFromString(CurrentRecord[Index]);
+                return (T)value;
+            }
+            return default(T);
+        }
+
+		public TRecord GetRecord<TRecord>() where TRecord : new()
 		{
 			throwIfParserHasNotBeenRead();
-			TEntity record;
+            TRecord record;
 			try
 			{
-				record = createRecord<TEntity>();
+				record = createRecord<TRecord>();
 			}
 			catch (Exception)
 			{

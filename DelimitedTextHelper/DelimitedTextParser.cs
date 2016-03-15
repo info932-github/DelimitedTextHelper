@@ -15,17 +15,23 @@ namespace DelimitedTextHelper
         private const string QUOTE = "\"";
         private const string ESCAPED_QUOTE = "\"\"";
         private char[] CHARACTERS_THAT_MUST_BE_QUOTED;
-
+        private bool _skipComments = false;
         public DelimitedTextParser(TextReader reader):this(reader, ',')
         {
 
         }
 
-        public DelimitedTextParser(TextReader reader, char delimiter)
+        public DelimitedTextParser(TextReader reader, char delimiter):this(reader, delimiter, false)
+        {
+
+        }
+
+        public DelimitedTextParser(TextReader reader, char delimiter, bool skipComments)
         {
             _delimiter = delimiter;
             _reader = reader;
             CHARACTERS_THAT_MUST_BE_QUOTED = new char[]{ _delimiter, '"', '\n' };
+            _skipComments = skipComments;
         }
 
         public virtual string[] Read()
@@ -49,10 +55,22 @@ namespace DelimitedTextHelper
                 string[] record = null;
                 if (_reader != null)
                 {
-                    var row = _reader.ReadLine();
-                    if (!string.IsNullOrEmpty(row))
+                    bool done = false;
+                    while (!done)
                     {
-                        record = GetRow(row);
+                        var row = _reader.ReadLine();
+                        if (_skipComments && row.StartsWith("#"))
+                        {
+                            continue;
+                        }
+                        if (!string.IsNullOrEmpty(row))
+                        {
+                            return record = GetRow(row);
+                        }
+                        else
+                        {
+                            return null;
+                        }
                     }
                 }
 
