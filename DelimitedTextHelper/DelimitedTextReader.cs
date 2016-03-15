@@ -23,10 +23,11 @@ namespace DelimitedTextHelper
         public virtual bool IgnoreMappingExceptions { get; set; }
 		public virtual bool AreFieldHeadersCaseSensitive { get; set; }
 		public virtual bool FirstRowIsHeader { get; set; }
-		/// <summary>
-		/// Gets the field headers.
-		/// </summary>
-		public virtual string[] FieldHeaders
+        public virtual Func<string[], bool> ShouldSkipRecord { get; set; }
+        /// <summary>
+        /// Gets the field headers.
+        /// </summary>
+        public virtual string[] FieldHeaders
 		{
 			get
 			{
@@ -127,6 +128,15 @@ namespace DelimitedTextHelper
 
 		public bool SkipRecord()
 		{
+            if(_currentRecord == null)
+            {
+                return false;
+            }
+
+            if(ShouldSkipRecord != null)
+            {
+                return ShouldSkipRecord(_currentRecord);
+            }
 			return false;
 		}
 
