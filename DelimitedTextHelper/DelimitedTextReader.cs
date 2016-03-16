@@ -111,7 +111,7 @@ namespace DelimitedTextHelper
             return default(T);
         }
 
-		public TRecord GetRecord<TRecord>() where TRecord : new()
+		public virtual TRecord GetRecord<TRecord>() where TRecord : new()
 		{
 			throwIfParserHasNotBeenRead();
             TRecord record;
@@ -126,6 +126,24 @@ namespace DelimitedTextHelper
 			}
 			return record;
 		}
+
+        public virtual IEnumerable<TRecord> GetAllRecords<TRecord>() where TRecord : new()
+        {
+            while (Read())
+            {
+                TRecord record;
+                try
+                {
+                    record = createRecord<TRecord>();
+                }
+                catch (Exception ex)
+                {
+                    throw;
+                }
+
+                yield return record;
+            }
+        }
 
         private List<PropertyMapping> _propertyMappings = new List<PropertyMapping>();
 		public PropertyMapping MapProperty<TRecord>(Expression<Func<TRecord, object>> expression)

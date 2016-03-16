@@ -10,12 +10,13 @@ namespace DelimitedTextHelper
     public class DelimitedTextParser : IDisposable
     {
         private TextReader _reader;
-        private char _delimiter;        
-
+        private char _delimiter;                
         private const string QUOTE = "\"";
         private const string ESCAPED_QUOTE = "\"\"";
         private char[] CHARACTERS_THAT_MUST_BE_QUOTED;
         private bool _skipComments = false;
+
+        public virtual long LineNumber { get; set; }
         public DelimitedTextParser(TextReader reader):this(reader, ',')
         {
 
@@ -50,6 +51,7 @@ namespace DelimitedTextHelper
 
         protected virtual string[] ReadLine()
         {
+            LineNumber++;
             try
             {
                 string[] record = null;
@@ -59,18 +61,16 @@ namespace DelimitedTextHelper
                     while (!done)
                     {
                         var row = _reader.ReadLine();
+                        if (string.IsNullOrEmpty(row))
+                        {
+                            return null;
+                        }
                         if (_skipComments && row.StartsWith("#"))
                         {
                             continue;
                         }
-                        if (!string.IsNullOrEmpty(row))
-                        {
-                            return record = GetRow(row);
-                        }
-                        else
-                        {
-                            return null;
-                        }
+                        
+                        return record = GetRow(row);                        
                     }
                 }
 

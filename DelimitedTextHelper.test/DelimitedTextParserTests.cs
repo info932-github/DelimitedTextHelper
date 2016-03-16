@@ -37,6 +37,55 @@ namespace DelimitedTextParserTest
         }
 
         [TestMethod]
+        public void RowBlankLinesTest()
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new StreamWriter(stream))
+            using (var reader = new StreamReader(stream))
+            using (var parser = new DelimitedTextParser(reader))
+            {
+                writer.Write("1,2\r\n");
+                writer.Write("\r\n");
+                writer.Write("3,4\r\n");
+                writer.Write("\r\n");
+                writer.Write("5,6\r\n");
+                writer.Flush();
+                stream.Position = 0;
+
+                var rowCount = 1;
+                while (parser.Read() != null)
+                {
+                    Assert.AreEqual(rowCount, parser.LineNumber);
+                    rowCount += 2;
+                }
+            }
+        }
+
+        [TestMethod]
+        public void LastLineIsBlankTestSkippingComments()
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new StreamWriter(stream))
+            using (var reader = new StreamReader(stream))
+            using (var parser = new DelimitedTextParser(reader, ',', true))
+            {
+                writer.Write("1,2\r\n");
+                writer.Write("3,4\r\n");
+                writer.Write("5,6\r\n");
+                writer.Write("");
+                writer.Flush();
+                stream.Position = 0;
+
+                var rowCount = 1;
+                while (parser.Read() != null)
+                {
+                    Assert.AreEqual(rowCount, parser.LineNumber);
+                    rowCount += 1;
+                }
+            }
+        }
+
+        [TestMethod]
         public void ParseNewRecordTest()
         {
             var stream = new MemoryStream();

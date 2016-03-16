@@ -2,12 +2,52 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.IO;
 using System.ComponentModel;
+using System.Linq;
 
 namespace DelimitedTextParserTest
 {
     [TestClass]
     public class DelimitedTextReaderTests
     {
+        [TestMethod]
+        public void TestGetRecordsGeneric()
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new StreamWriter(stream))
+            using (var reader = new StreamReader(stream))
+            using (var dtReader = new DelimitedTextHelper.DelimitedTextReader(reader))
+            {
+                writer.Write("Field1,Field2,Field3,Field4,Field5\r\n");
+                writer.Write("value1,100,true,\"12/31/2016\", 25.76\r\n");
+                writer.Write("value2,200,false,\"1/1/2016\", 67.52\r\n");
+                writer.Flush();
+                stream.Position = 0;
+
+                dtReader.FirstRowIsHeader = true;
+                var records = dtReader.GetAllRecords<TestRecord>().ToList();
+
+                Assert.AreEqual(2, records.Count);
+
+                TestRecord trecord = records[0];
+                Assert.IsNotNull(trecord);
+                Assert.AreEqual("value1", trecord.Field1);
+                Assert.AreEqual(100, trecord.Field2);
+                Assert.IsTrue(trecord.Field3);
+                Assert.AreEqual(DateTime.Parse("12/31/2016").ToShortDateString(), trecord.Field4.ToShortDateString());
+                Assert.AreEqual(25.76M, trecord.Field5);
+
+                trecord = records[1];
+                Assert.IsNotNull(trecord);
+                Assert.AreEqual("value2", trecord.Field1);
+                Assert.AreEqual(200, trecord.Field2);
+                Assert.IsFalse(trecord.Field3);
+                Assert.AreEqual(DateTime.Parse("1/1/2016").ToShortDateString(), trecord.Field4.ToShortDateString());
+                Assert.AreEqual(67.52M, trecord.Field5);
+            }
+
+                
+        }
+
         [TestMethod]
         public void TestReaderGetRecord()
         {
